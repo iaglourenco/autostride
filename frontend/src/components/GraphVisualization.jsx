@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import {  useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -76,8 +76,10 @@ const GraphVisualization = ({ graphData }) => {
     return { nodes, edges };
   }, [graphData]);
 
-  const [nodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, onEdgesChange] = useEdgesState(initialEdges);
+  // eslint-disable-next-line no-unused-vars
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  // eslint-disable-next-line no-unused-vars
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   if (!graphData || graphData.nodes.length === 0) {
     return (
