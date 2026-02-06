@@ -1,6 +1,6 @@
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
-python-multipart==0.0.17
+python-multipart==0.0.22
 ultralytics==8.4.7
 opencv-python==4.10.0.84
 pillow==11.0.0
