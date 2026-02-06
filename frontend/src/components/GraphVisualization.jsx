@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -76,8 +76,8 @@ const GraphVisualization = ({ graphData }) => {
     return { nodes, edges };
   }, [graphData]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, onEdgesChange] = useEdgesState(initialEdges);
 
   if (!graphData || graphData.nodes.length === 0) {
     return (

@@ -1,6 +1,7 @@
 # AutoStride
 
 Sistema automatizado de análise STRIDE para diagramas de arquitetura usando YOLO e React.
+Desenvolvido como projeto do Hackaton do curso de pós graduação de Inteligência Artificial pela FIAP.
 
 ## Visão Geral
 
@@ -225,73 +226,8 @@ O modelo YOLO11m-pose foi treinado especificamente para:
 - Detectar componentes de arquitetura em diagramas
 - Identificar keypoints de setas para construir conexões
 - Localização: `ml/runs/detect/yolo11m-pose_manual/weights/best.pt`
-
-## Estrutura do Projeto
-
-```txt
-autostride/
-├── backend/
-│   ├── main.py                    # FastAPI app principal
-│   ├── requirements.txt           # Dependências Python
-│   ├── models/
-│   │   └── yolo_loader.py        # Carregamento do modelo YOLO
-│   ├── services/
-│   │   ├── graph_builder.py      # Construção do grafo
-│   │   └── stride_analyzer.py    # Análise STRIDE
-│   └── schemas/
-│       └── api_models.py         # Modelos Pydantic
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── ImageUpload.jsx
-│   │   │   ├── GraphVisualization.jsx
-│   │   │   └── StrideAnalysis.jsx
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── package.json
-│   └── vite.config.js
-└── ml/
-    └── runs/detect/yolo11m-pose_manual/
-        └── weights/
-            └── best.pt            # Modelo YOLO treinado
-```
-
-## Troubleshooting
-
-### Backend não inicia
-
-- Verifique se todas as dependências foram instaladas: `pip install -r requirements.txt`
-- Confirme que o modelo YOLO existe em `ml/runs/detect/yolo11m-pose_manual/weights/best.pt`
-- Verifique a versão do Python (recomendado: 3.8+)
-
-### Frontend não conecta ao backend
-
-- Confirme que o backend está rodando em <http://localhost:8000>
-- Verifique o console do navegador para erros de CORS
-- Teste o backend diretamente: `curl http://localhost:8000/health`
-
-### Erro de Tailwind CSS
-
-- Reinstale as dependências: `cd frontend && npm install`
-- Limpe o cache: `rm -rf node_modules package-lock.json && npm install`
-
-## Próximos Passos
-
-Melhorias futuras:
-
-- [ ] Adicionar autenticação/autorização na API
-- [ ] Implementar cache de resultados
-- [ ] Adicionar mais heurísticas para análise STRIDE
-- [ ] Criar endpoint para listar modelos disponíveis
-- [ ] Implementar WebSocket para processamento em tempo real
-- [ ] Adicionar histórico de análises com banco de dados
-- [ ] Exportar relatórios em PDF
-- [ ] Suporte para múltiplos idiomas
+- Esse foi o melhor modelo encontrado após testes com diversos outros modelos e configurações.
 
 ## Licença
 
 MIT
-
-## Autores
-
-Desenvolvido com Claude Code para análise STRIDE automatizada.
