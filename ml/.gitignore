@@ -24,7 +24,6 @@ models/
 
 # Training runs and experiments
 experiments/
-runs/
 wandb/
 mlruns/
 lightning_logs/
