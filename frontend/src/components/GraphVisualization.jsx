@@ -22,8 +22,10 @@ const nodeColors = {
   user: "#ec4899",
 };
 
-// Custom node with handles on all sides
+// Custom node with dynamic handles - only creates handles that have connections
 const CustomNode = ({ data }) => {
+  const { handles = {}, isBoundary = false } = data;
+
   return (
     <div
       style={{
@@ -34,12 +36,51 @@ const CustomNode = ({ data }) => {
         padding: data.padding,
         fontSize: data.fontSize,
         minWidth: data.minWidth,
+        minHeight: isBoundary ? data.minHeight : 'auto',
+        width: isBoundary ? data.width : 'auto',
+        height: isBoundary ? data.height : 'auto',
       }}
     >
-      <Handle type="target" position={Position.Top} id="top" />
-      <Handle type="target" position={Position.Left} id="left" />
-      <Handle type="source" position={Position.Right} id="right" />
-      <Handle type="source" position={Position.Bottom} id="bottom" />
+      {/* Top handles - only render if used */}
+      {handles.top && (
+        <Handle
+          type={handles.top.isSource && handles.top.isTarget ? "source" : handles.top.isSource ? "source" : "target"}
+          position={Position.Top}
+          id="top"
+          isConnectable={true}
+        />
+      )}
+
+      {/* Right handles - only render if used */}
+      {handles.right && (
+        <Handle
+          type={handles.right.isSource && handles.right.isTarget ? "source" : handles.right.isSource ? "source" : "target"}
+          position={Position.Right}
+          id="right"
+          isConnectable={true}
+        />
+      )}
+
+      {/* Bottom handles - only render if used */}
+      {handles.bottom && (
+        <Handle
+          type={handles.bottom.isSource && handles.bottom.isTarget ? "source" : handles.bottom.isSource ? "source" : "target"}
+          position={Position.Bottom}
+          id="bottom"
+          isConnectable={true}
+        />
+      )}
+
+      {/* Left handles - only render if used */}
+      {handles.left && (
+        <Handle
+          type={handles.left.isSource && handles.left.isTarget ? "source" : handles.left.isSource ? "source" : "target"}
+          position={Position.Left}
+          id="left"
+          isConnectable={true}
+        />
+      )}
+
       {data.label}
     </div>
   );
@@ -55,51 +96,95 @@ const GraphVisualization = ({ graphData }) => {
     if (!graphData) return { nodes: [], edges: [] };
 
     const padding = 200;
-    const nodes = graphData.nodes.map((node) => ({
-      id: node.id,
-      type: "custom",
-      position: {
-        x: node.position.x - padding / 2,
-        y: node.position.y - padding / 2,
-      },
-      data: {
-        label: (
-          <div className="text-center">
-            <div className="font-bold text-sm">
-              {node.type.replace("_", " ")}
-            </div>
-            <div className="text-xs text-gray-500">{node.id}</div>
-            <div className="text-xs text-gray-400">
-              {(node.confidence * 100).toFixed(1)}%
-            </div>
-          </div>
-        ),
-        background: nodeColors[node.type] || "#gray",
-        color: "white",
-        border: "2px solid #fff",
-        borderRadius: "8px",
-        padding: "10px",
-        fontSize: "12px",
-        minWidth: "120px",
-      },
-    }));
 
-    // Prevent node overlapping
-    const minDistance = 150; // Minimum distance between nodes
+    // Create a map from API nodes for quick lookup
+    const apiNodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
+
+    // First pass: create nodes with basic properties
+    const nodes = graphData.nodes.map((node) => {
+      const isBoundary = node.type === "boundary";
+
+      return {
+        id: node.id,
+        type: "custom",
+        // Position calculation: if has parent, use relative position
+        position: node.parent_id
+          ? {
+              // Relative to parent's bbox
+              x: node.bbox[0] - apiNodeMap.get(node.parent_id).bbox[0] + 10,
+              y: node.bbox[1] - apiNodeMap.get(node.parent_id).bbox[1] + 30,
+            }
+          : {
+              // Absolute position for root nodes
+              x: node.position.x - padding / 2,
+              y: node.position.y - padding / 2,
+            },
+        // Set parent relationship
+        parentNode: node.parent_id || undefined,
+        extent: node.parent_id ? "parent" : undefined,
+        style: isBoundary
+          ? {
+              width: node.width || 300,
+              height: node.height || 200,
+              zIndex: -1, // Boundaries behind other nodes
+            }
+          : {},
+        data: {
+          label: (
+            <div className="text-center">
+              <div className="font-bold text-sm">
+                {node.type.replace("_", " ")}
+              </div>
+              {!isBoundary && (
+                <>
+                  <div className="text-xs text-gray-500">{node.id}</div>
+                  <div className="text-xs text-gray-400">
+                    {(node.confidence * 100).toFixed(1)}%
+                  </div>
+                </>
+              )}
+            </div>
+          ),
+          background: isBoundary
+            ? "rgba(239, 68, 68, 0.1)" // Transparent red for boundaries
+            : nodeColors[node.type] || "#gray",
+          color: isBoundary ? "#ef4444" : "white",
+          border: isBoundary ? "2px dashed #ef4444" : "2px solid #fff",
+          borderRadius: "8px",
+          padding: isBoundary ? "20px" : "10px",
+          fontSize: "12px",
+          minWidth: isBoundary ? node.width : "120px",
+          minHeight: isBoundary ? node.height : undefined,
+          width: isBoundary ? node.width : undefined,
+          height: isBoundary ? node.height : undefined,
+          isBoundary,
+          handles: {}, // Will be populated based on edges
+        },
+      };
+    });
+
+    // Skip overlap prevention for child nodes (they're positioned relative to parent)
+    // Only adjust root-level nodes that might overlap
+    const minDistance = 150;
     const adjustedNodes = nodes.map((node, i) => {
+      // Skip adjustment for child nodes (relative positioning)
+      if (node.parentNode) return node;
+
       let newX = node.position.x;
       let newY = node.position.y;
 
-      // Check collision with all other nodes
+      // Check collision only with other root nodes
       for (let j = 0; j < nodes.length; j++) {
         if (i === j) continue;
 
         const other = nodes[j];
+        // Skip if other is a child node
+        if (other.parentNode) continue;
+
         const dx = node.position.x - other.position.x;
         const dy = node.position.y - other.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // If nodes are too close, push them apart
         if (distance < minDistance && distance > 0) {
           const angle = Math.atan2(dy, dx);
           const pushDistance = (minDistance - distance) / 2;
@@ -117,8 +202,26 @@ const GraphVisualization = ({ graphData }) => {
     // Create a map for quick node lookup
     const nodeMap = new Map(adjustedNodes.map(node => [node.id, node]));
 
-    // Helper function to determine handle IDs based on node positions
-    const getHandleIds = (sourceId, targetId) => {
+    // Helper function to calculate absolute position of a node (considering parent hierarchy)
+    const getAbsolutePosition = (nodeId) => {
+      const node = nodeMap.get(nodeId);
+      if (!node) return { x: 0, y: 0 };
+
+      let absX = node.position.x;
+      let absY = node.position.y;
+
+      // If node has a parent, add parent's absolute position
+      if (node.parentNode) {
+        const parentPos = getAbsolutePosition(node.parentNode);
+        absX += parentPos.x;
+        absY += parentPos.y;
+      }
+
+      return { x: absX, y: absY };
+    };
+
+    // Helper function to determine handle positions based on absolute node positions
+    const determineHandlePosition = (sourceId, targetId) => {
       const sourceNode = nodeMap.get(sourceId);
       const targetNode = nodeMap.get(targetId);
 
@@ -126,17 +229,20 @@ const GraphVisualization = ({ graphData }) => {
         return { sourceHandle: "right", targetHandle: "left" };
       }
 
-      const dx = targetNode.position.x - sourceNode.position.x;
-      const dy = targetNode.position.y - sourceNode.position.y;
+      // Get absolute positions in the canvas
+      const sourcePos = getAbsolutePosition(sourceId);
+      const targetPos = getAbsolutePosition(targetId);
+
+      const dx = targetPos.x - sourcePos.x;
+      const dy = targetPos.y - sourcePos.y;
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
 
-      // Determine handle IDs based on relative positions
       let sourceHandle = "right";
       let targetHandle = "left";
 
       if (absDx > absDy) {
-        // Horizontal alignment is more significant
+        // Horizontal alignment dominant
         if (dx > 0) {
           sourceHandle = "right";
           targetHandle = "left";
@@ -145,7 +251,7 @@ const GraphVisualization = ({ graphData }) => {
           targetHandle = "right";
         }
       } else {
-        // Vertical alignment is more significant
+        // Vertical alignment dominant
         if (dy > 0) {
           sourceHandle = "bottom";
           targetHandle = "top";
@@ -158,8 +264,44 @@ const GraphVisualization = ({ graphData }) => {
       return { sourceHandle, targetHandle };
     };
 
+    // Second pass: analyze edges to determine which handles each node needs
+    const handleUsage = new Map();
+
+    graphData.edges.forEach((edge) => {
+      const { sourceHandle, targetHandle } = determineHandlePosition(edge.source, edge.target);
+
+      // Track source node handle usage
+      if (!handleUsage.has(edge.source)) {
+        handleUsage.set(edge.source, {});
+      }
+      const sourceHandles = handleUsage.get(edge.source);
+      if (!sourceHandles[sourceHandle]) {
+        sourceHandles[sourceHandle] = { isSource: false, isTarget: false };
+      }
+      sourceHandles[sourceHandle].isSource = true;
+
+      // Track target node handle usage
+      if (!handleUsage.has(edge.target)) {
+        handleUsage.set(edge.target, {});
+      }
+      const targetHandles = handleUsage.get(edge.target);
+      if (!targetHandles[targetHandle]) {
+        targetHandles[targetHandle] = { isSource: false, isTarget: false };
+      }
+      targetHandles[targetHandle].isTarget = true;
+    });
+
+    // Update nodes with handle information
+    adjustedNodes.forEach(node => {
+      const handles = handleUsage.get(node.id);
+      if (handles) {
+        node.data.handles = handles;
+      }
+    });
+
+    // Create edges with determined handle positions
     const edges = graphData.edges.map((edge) => {
-      const { sourceHandle, targetHandle } = getHandleIds(edge.source, edge.target);
+      const { sourceHandle, targetHandle } = determineHandlePosition(edge.source, edge.target);
 
       return {
         id: edge.id,
@@ -167,7 +309,7 @@ const GraphVisualization = ({ graphData }) => {
         target: edge.target,
         sourceHandle,
         targetHandle,
-        type: "smoothstep",
+        type: "default",
         animated: true,
         style: {
           stroke: "#64748b",
