@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import ImageUpload from './components/ImageUpload';
 import GraphVisualization from './components/GraphVisualization';
 import StrideAnalysis from './components/StrideAnalysis';
 
-const API_URL = 'http://localhost:8000/api/v1/inference';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const INFERENCE_ENDPOINT = `${API_URL}/api/v1/inference`;
+const MODELS_ENDPOINT = `${API_URL}/api/v1/models`;
 
 function App() {
   const [loading, setLoading] = useState(false);
@@ -12,18 +14,49 @@ function App() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('graph');
   const [confThreshold, setConfThreshold] = useState(0.5);
+  const [availableModels, setAvailableModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [loadingModels, setLoadingModels] = useState(true);
+  const [currentFile, setCurrentFile] = useState(null);
 
-  const handleImageUpload = async (file) => {
+  // Load available models on component mount
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const response = await axios.get(MODELS_ENDPOINT);
+        setAvailableModels(response.data.available_models);
+        setSelectedModel(response.data.default_model);
+      } catch (err) {
+        console.error('Error fetching models:', err);
+        setError('Erro ao carregar modelos disponíveis. Usando modelo padrão.');
+      } finally {
+        setLoadingModels(false);
+      }
+    };
+
+    fetchModels();
+  }, []);
+
+  const processImage = async (file) => {
     setLoading(true);
     setError(null);
-    setResults(null);
 
     try {
       const formData = new FormData();
       formData.append('file', file);
 
+      const params = new URLSearchParams({
+        conf_threshold: confThreshold.toString(),
+        include_visualization: 'true',
+      });
+
+      // Add model name if selected
+      if (selectedModel) {
+        params.append('model_name', selectedModel);
+      }
+
       const response = await axios.post(
-        `${API_URL}?conf_threshold=${confThreshold}&include_visualization=true`,
+        `${INFERENCE_ENDPOINT}?${params.toString()}`,
         formData,
         {
           headers: {
@@ -45,6 +78,23 @@ function App() {
     }
   };
 
+  const handleImageUpload = async (file) => {
+    setCurrentFile(file);
+    setResults(null);
+    await processImage(file);
+  };
+
+  const handleRemoveImage = () => {
+    setCurrentFile(null);
+    setResults(null);
+    setError(null);
+  };
+
+  const handleReanalyze = async () => {
+    if (!currentFile) return;
+    await processImage(currentFile);
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -58,6 +108,31 @@ function App() {
               </p>
             </div>
             <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="model-select"
+                  className="text-sm text-gray-700 font-medium"
+                >
+                  Modelo:
+                </label>
+                <select
+                  id="model-select"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading || loadingModels}
+                >
+                  {loadingModels ? (
+                    <option>Carregando...</option>
+                  ) : (
+                    availableModels.map((model) => (
+                      <option key={model} value={model}>
+                        {model}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
               <div className="flex items-center gap-2">
                 <label
                   htmlFor="conf-threshold"
@@ -77,6 +152,28 @@ function App() {
                   disabled={loading}
                 />
               </div>
+              {currentFile && (
+                <button
+                  onClick={handleReanalyze}
+                  disabled={loading}
+                  className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Reavaliar
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -90,7 +187,11 @@ function App() {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
               1. Upload do Diagrama
             </h2>
-            <ImageUpload onImageUpload={handleImageUpload} loading={loading} />
+            <ImageUpload
+              onImageUpload={handleImageUpload}
+              onRemoveImage={handleRemoveImage}
+              loading={loading}
+            />
           </div>
 
           {/* Error Display */}

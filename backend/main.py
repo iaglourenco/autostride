@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
 import cv2
 import numpy as np
 from PIL import Image
@@ -29,24 +30,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize services (lazy loading for YOLO model)
-yolo_model = None
+# Initialize services
 graph_builder = GraphBuilder()
 stride_analyzer = StrideAnalyzer()
 
-
-def get_yolo_model():
-    """Get or initialize YOLO model (singleton pattern)."""
-    global yolo_model
-    if yolo_model is None:
-        yolo_model = YOLOModel()
-    return yolo_model
+# Initialize YOLO model manager on startup
+YOLOModel.initialize()
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "AutoStride API", "version": "1.0.0"}
+
+
+@app.get("/api/v1/models")
+async def list_models():
+    """List available YOLO models."""
+    return {
+        "available_models": YOLOModel.get_available_models(),
+        "default_model": YOLOModel.get_default_model(),
+    }
 
 
 @app.post("/api/v1/inference", response_model=InferenceResponse)
@@ -58,6 +62,10 @@ async def inference(
     include_visualization: bool = Query(
         False, description="Include visualization image in response"
     ),
+    model_name: Optional[str] = Query(
+        None,
+        description="YOLO model to use (e.g., 'yolo11m-pose_manual_v3_v1'). If not specified, uses default model.",
+    ),
 ):
     """
     Process an architecture diagram and return graph + STRIDE analysis.
@@ -66,6 +74,7 @@ async def inference(
         file: Uploaded image file (PNG, JPG, JPEG)
         conf_threshold: Detection confidence threshold (0.1 to 1.0)
         include_visualization: Whether to include visualization with detections
+        model_name: Name of YOLO model to use. If None, uses default model.
 
     Returns:
         InferenceResponse with graph, STRIDE analysis, and metadata
@@ -109,9 +118,10 @@ async def inference(
             f"DEBUG: Image shape after conversion: {image_np.shape}, dtype: {image_np.dtype}"
         )
 
-        # Run YOLO inference
-        model = get_yolo_model()
-        yolo_results = model.predict(image_np, conf_threshold=conf_threshold)
+        # Run YOLO inference with selected model
+        yolo_results = YOLOModel.predict(
+            image_np, conf_threshold=conf_threshold, model_name=model_name
+        )
 
         # Build graph from detections
         graph = graph_builder.build_graph(yolo_results)
@@ -141,9 +151,10 @@ async def inference(
         total_detections = len(graph.nodes) + len(graph.edges)
 
         # Create metadata
+        used_model = model_name if model_name else YOLOModel.get_default_model()
         metadata = Metadata(
             processing_time_ms=round(processing_time, 2),
-            model_version="yolo11m-pose_manual",
+            model_version=used_model,
             total_detections=total_detections,
             confidence_threshold=conf_threshold,
         )
@@ -172,6 +183,7 @@ async def root():
         "version": "1.0.0",
         "endpoints": {
             "health": "/health",
+            "models": "/api/v1/models",
             "inference": "/api/v1/inference",
             "docs": "/docs",
         },

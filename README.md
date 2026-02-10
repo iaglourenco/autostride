@@ -11,23 +11,6 @@ AutoStride é uma aplicação completa que permite fazer upload de diagramas de 
 2. **Construção de Grafo**: Cria um grafo conectando os componentes através das setas detectadas
 3. **Análise STRIDE**: Realiza análise automática de ameaças usando a metodologia STRIDE
 
-## Arquitetura
-
-```txt
-autostride/
-├── backend/          # API FastAPI + YOLO
-│   ├── main.py
-│   ├── models/
-│   ├── services/
-│   └── schemas/
-├── frontend/         # Interface React + Vite
-│   └── src/
-│       ├── components/
-│       └── App.jsx
-└── ml/              # Modelo YOLO treinado
-    └── runs/detect/yolo11m-pose_manual/
-```
-
 ## Tecnologias
 
 ### Backend
@@ -45,58 +28,40 @@ autostride/
 - **React Flow** - Visualização de grafos
 - **Axios** - Cliente HTTP
 
-## Instalação
-
-### Instruções Backend
-
-1. Instalar dependências Python:
+## Executar com Docker
 
 ```bash
-cd backend
-pip install -r requirements.txt
+# Build e start
+docker-compose build
+docker-compose up -d
+
+# Acessar
+# Frontend: http://localhost:3000
+# Backend: http://localhost:8000
+# API Docs: http://localhost:8000/docs
+# Modelos: http://localhost:8000/api/v1/models
 ```
 
-### Instruções Frontend
+### Seleção de Modelo
 
-1. Instalar dependências Node:
+A API suporta múltiplos modelos. Use o parâmetro `model_name`:
 
 ```bash
-cd frontend
-npm install
+# Listar modelos disponíveis
+curl http://localhost:8000/api/v1/models
+
+# Usar modelo específico
+curl -X POST "http://localhost:8000/api/v1/inference?model_name=yolo11m-pose_manual_v3_v1" \
+  -F "file=@diagram.png"
 ```
 
-## Executando a Aplicação
+### Requisitos para GPU
 
-### 1. Iniciar o Backend
+- Docker Desktop ou Docker Engine
+- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+- GPU NVIDIA com drivers CUDA
 
-```bash
-cd backend
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-O backend estará disponível em:
-
-- API: <http://localhost:8000>
-- Documentação interativa: <http://localhost:8000/docs>
-
-### 2. Iniciar o Frontend
-
-Em outro terminal:
-
-```bash
-cd frontend
-npm run dev
-```
-
-O frontend estará disponível em: <http://localhost:5173/> (ou 5174 se a porta estiver em uso)
-
-## Como Usar
-
-1. **Acesse a aplicação** em <http://localhost:5173/>
-2. **Faça upload** de uma imagem do diagrama de arquitetura (PNG, JPG, JPEG)
-3. **Aguarde o processamento** (~300-500ms)
-4. **Visualize o grafo** extraído automaticamente com os componentes detectados
-5. **Analise as ameaças STRIDE** identificadas e suas recomendações de mitigação
+Para usar apenas CPU, remova a seção `deploy` do backend no `docker-compose.yml`.
 
 ## Funcionalidades
 
@@ -225,9 +190,3 @@ O modelo YOLO11m-pose foi treinado especificamente para:
 
 - Detectar componentes de arquitetura em diagramas
 - Identificar keypoints de setas para construir conexões
-- Localização: `ml/runs/detect/yolo11m-pose_manual/weights/best.pt`
-- Esse foi o melhor modelo encontrado após testes com diversos outros modelos e configurações.
-
-## Licença
-
-MIT

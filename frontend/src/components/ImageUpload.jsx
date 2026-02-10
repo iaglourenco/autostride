@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-const ImageUpload = ({ onImageUpload, loading }) => {
+const ImageUpload = ({ onImageUpload, onRemoveImage, loading }) => {
   const [dragActive, setDragActive] = useState(false);
   const [preview, setPreview] = useState(null);
 
@@ -82,6 +82,9 @@ const ImageUpload = ({ onImageUpload, loading }) => {
               onClick={() => {
                 setPreview(null);
                 document.getElementById('file-upload').value = '';
+                if (onRemoveImage) {
+                  onRemoveImage();
+                }
               }}
               className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
               disabled={loading}

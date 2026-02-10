@@ -54,7 +54,7 @@ class StrideAnalysisResult(BaseModel):
 
 class Metadata(BaseModel):
     processing_time_ms: float
-    model_version: str
+    model_version: Optional[str]
     total_detections: int
     confidence_threshold: float
 

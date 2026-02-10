@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+venv/
+env/
+ENV/
+
+# Node
+node_modules/
+dist/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+
+# ML Models (large files, should be tracked separately)
+# Uncomment if you want to ignore model files
+# *.pt
+# *.pth
+
+# Docker
+# Uncomment if you want to ignore docker-compose overrides
+# docker-compose.override.yml

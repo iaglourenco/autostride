@@ -1,0 +1,44 @@
+# Virtual environments
+backend/backend_venv/
+ml/venv/
+**/venv/
+**/env/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Node modules
+**/node_modules/
+
+# Build outputs
+frontend/dist/
+frontend/build/
+
+# IDE
+.vscode/
+.idea/
+**/*.swp
+**/*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+**/.gitkeep
+
+# Documentation
+docs/
+README.md
+
+# ML training outputs (keep only detection runs for models)
+ml/datasets/
+ml/src/
+
+# Logs
+**/*.log
