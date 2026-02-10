@@ -13,6 +13,11 @@ class Node(BaseModel):
     position: Position
     confidence: float
     bbox: List[float] = Field(description="Bounding box [x1, y1, x2, y2]")
+    width: float
+    height: float
+    area: float
+    parent_id: Optional[str] = None
+    children: List[str] = []
 
 
 class Edge(BaseModel):
@@ -22,6 +27,7 @@ class Edge(BaseModel):
     keypoints: List[List[float]] = Field(
         description="Start and end keypoints [[x1,y1], [x2,y2]]"
     )
+    cross_boundary: bool = False
 
 
 class Graph(BaseModel):

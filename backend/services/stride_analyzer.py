@@ -1,4 +1,4 @@
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Optional
 from schemas.api_models import (
     Graph,
     Node,
@@ -10,227 +10,119 @@ from schemas.api_models import (
 
 
 class StrideAnalyzer:
-    """Analyzes a graph for STRIDE security threats."""
+    """
+    Analisa um grafo de arquitetura para ameaças STRIDE com consciência de contexto e hierarquia.
+    """
 
     def __init__(self):
-        # Define threat rules by component type
-        self.component_threats = {
-            "user": [
-                (
-                    "Spoofing",
+        # Regras base (Static Knowledge Base)
+        self.kb_threats = {
+            "database": {
+                "Tampering": (
                     "High",
-                    "Usuários podem ter suas identidades falsificadas sem autenticação robusta",
-                    "Implementar autenticação multi-fator (MFA) e políticas de senha forte",
+                    "Injeção SQL ou alteração não autorizada de dados persistidos.",
                 ),
-                (
-                    "Repudiation",
-                    "Medium",
-                    "Ações do usuário podem não ser registradas adequadamente",
-                    "Implementar sistema de logging e auditoria completo",
+                "Information Disclosure": (
+                    "Critical",
+                    "Vazamento de dados sensíveis (PII, Segredos) em repouso.",
                 ),
-            ],
-            "database": [
-                (
-                    "Tampering",
+                "Denial of Service": (
                     "High",
-                    "Dados podem ser adulterados através de ataques de injeção SQL",
-                    "Usar prepared statements, validação de entrada rigorosa e princípio do menor privilégio",
+                    "Esgotamento de conexões ou CPU do banco de dados.",
                 ),
-                (
-                    "Information Disclosure",
+            },
+            "service": {
+                "Spoofing": (
+                    "Medium",
+                    "Impersonação de serviço ou falta de identidade (Service Mesh).",
+                ),
+                "Repudiation": ("Medium", "Falta de logs de transações de negócio."),
+                "Elevation of Privilege": (
                     "High",
-                    "Dados sensíveis podem ser expostos sem criptografia adequada",
-                    "Implementar criptografia em repouso (TDE) e em trânsito (TLS/SSL)",
+                    "Execução remota de código (RCE) ou permissões excessivas (IAM).",
                 ),
-            ],
-            "cache": [
-                (
-                    "Information Disclosure",
+            },
+            "cache": {
+                "Information Disclosure": (
                     "Medium",
-                    "Dados em cache podem ser acessados sem criptografia",
-                    "Criptografar dados sensíveis em cache e implementar TTL apropriado",
+                    "Dados em cache não criptografados.",
                 ),
-                (
-                    "Tampering",
-                    "Medium",
-                    "Dados em cache podem ser adulterados",
-                    "Implementar validação de integridade de dados em cache",
-                ),
-            ],
-            "external_service": [
-                (
-                    "Spoofing",
+            },
+            "external_service": {
+                "Spoofing": (
                     "High",
-                    "Serviços externos podem não ter sua origem validada",
-                    "Implementar validação de certificados SSL/TLS e autenticação mútua",
+                    "Dependência externa não verificada (Supply Chain Attack).",
                 ),
-                (
-                    "Information Disclosure",
+                "Denial of Service": (
                     "Medium",
-                    "Dados podem ser interceptados durante comunicação externa",
-                    "Usar HTTPS/TLS para todas comunicações externas",
+                    "Latência ou queda do serviço terceiro impactando a disponibilidade.",
                 ),
-                (
-                    "Denial of Service",
-                    "Medium",
-                    "Dependência de serviços externos pode causar indisponibilidade",
-                    "Implementar circuit breakers, timeouts e fallback strategies",
-                ),
-            ],
-            "load_balancer": [
-                (
-                    "Denial of Service",
+            },
+            "load_balancer": {
+                "Denial of Service": (
                     "High",
-                    "Load balancer pode ser sobrecarregado causando indisponibilidade",
-                    "Implementar rate limiting, WAF e proteção DDoS",
+                    "Ponto único de falha para ataques volumétricos.",
                 ),
-                (
-                    "Tampering",
+                "Information Disclosure": (
                     "Medium",
-                    "Tráfego pode ser interceptado ou modificado",
-                    "Usar TLS/SSL para comunicação e validar integridade de requests",
+                    "Terminação SSL insegura ou logs de acesso expostos.",
                 ),
-            ],
-            "monitoring": [
-                (
-                    "Information Disclosure",
-                    "Low",
-                    "Logs podem conter informações sensíveis",
-                    "Implementar sanitização de logs e controle de acesso rigoroso",
-                ),
-                (
-                    "Tampering",
-                    "Low",
-                    "Logs podem ser alterados para ocultar atividades maliciosas",
-                    "Implementar logs imutáveis e assinaturas digitais",
-                ),
-            ],
-            "security": [
-                (
-                    "Elevation of Privilege",
-                    "High",
-                    "Componentes de segurança podem ter vulnerabilidades permitindo bypass",
-                    "Realizar testes de penetração regulares e manter componentes atualizados",
-                ),
-                (
-                    "Tampering",
-                    "High",
-                    "Controles de segurança podem ser desabilitados ou alterados",
-                    "Implementar integridade de código e monitoramento de mudanças",
-                ),
-            ],
-            "service": [
-                (
-                    "Spoofing",
-                    "Medium",
-                    "Serviços podem não validar identidade de chamadores",
-                    "Implementar autenticação de serviço-para-serviço (mTLS, JWT)",
-                ),
-                (
-                    "Tampering",
-                    "Medium",
-                    "Dados processados podem ser adulterados",
-                    "Validar entrada, usar assinaturas digitais para dados críticos",
-                ),
-                (
-                    "Information Disclosure",
-                    "Medium",
-                    "Serviços podem expor informações sensíveis",
-                    "Implementar controle de acesso e criptografia de dados",
-                ),
-                (
-                    "Denial of Service",
-                    "Medium",
-                    "Serviços podem ser sobrecarregados",
-                    "Implementar rate limiting, circuit breakers e scaling automático",
-                ),
-            ],
-            "boundary": [
-                (
-                    "Tampering",
-                    "High",
-                    "Dados cruzando limites de confiança podem ser adulterados",
-                    "Validar e sanitizar todos os dados que cruzam boundaries",
-                ),
-                (
-                    "Information Disclosure",
-                    "High",
-                    "Dados sensíveis podem vazar através de boundaries",
-                    "Implementar criptografia e controle de acesso em boundaries",
-                ),
-            ],
+            },
         }
 
     def analyze(self, graph: Graph) -> StrideAnalysisResult:
-        """
-        Perform comprehensive STRIDE analysis on the graph.
-
-        Combines three approaches:
-        1. Component-based: threats based on component type
-        2. Flow-based: threats based on data flow between components
-        3. Architectural patterns: holistic threats based on overall architecture
-        """
         threats = []
 
-        # Approach 1: Component-based analysis
-        component_threats = self._analyze_by_component(graph.nodes)
-        threats.extend(component_threats)
-
-        # Approach 2: Flow-based analysis
-        flow_threats = self._analyze_by_flow(graph)
-        threats.extend(flow_threats)
-
-        # Approach 3: Architectural pattern analysis
-        pattern_threats = self._analyze_architectural_patterns(graph)
-        threats.extend(pattern_threats)
-
-        # Remove duplicate threats (same category + affected components)
-        threats = self._deduplicate_threats(threats)
-
-        # Generate summary
-        summary = self._generate_summary(threats)
-
-        return StrideAnalysisResult(threats=threats, summary=summary)
-
-    def _analyze_by_component(self, nodes: List[Node]) -> List[ThreatAnalysis]:
-        """Analyze threats based on component types."""
-        threats = []
-
-        for node in nodes:
-
-            # Adjust severity based on detection confidence
-            confidence_modifier = ""
-            if node.confidence < 0.7:
-                confidence_modifier = "(baixa confiança)"
-
-            component_type = node.type
-            if component_type in self.component_threats:
-                for (
-                    category,
-                    severity,
-                    description,
-                    recommendation,
-                ) in self.component_threats[component_type]:
-                    threat = ThreatAnalysis(
-                        category=category,
-                        severity=severity,
-                        affected_components=[node.id],
-                        description=f"{component_type.replace('_', ' ').title()} ({node.id}): {description} {confidence_modifier}",
-                        recommendation=recommendation,
-                    )
-                    threats.append(threat)
-
-        return threats
-
-    def _analyze_by_flow(self, graph: Graph) -> List[ThreatAnalysis]:
-        """Analyze threats based on data flow between components."""
-        threats = []
-
-        # Create node lookup
+        # Mapa rápido para acesso aos nós
         node_map = {node.id: node for node in graph.nodes}
 
-        # Check if there are security components in the graph
-        has_security = any(node.type == "security" for node in graph.nodes)
+        # 1. Análise Contextual de Componentes (O nó em si)
+        threats.extend(self._analyze_components(graph.nodes))
+
+        # 2. Análise de Fluxo Hierárquico (O movimento do dado)
+        threats.extend(self._analyze_flows(graph, node_map))
+
+        # 3. Análise de Padrões Arquiteturais (A visão macro)
+        threats.extend(self._analyze_architecture(graph, node_map))
+
+        # Deduplicação e Sumário
+        unique_threats = self._deduplicate_threats(threats)
+        summary = self._generate_summary(unique_threats)
+
+        return StrideAnalysisResult(threats=unique_threats, summary=summary)
+
+    def _analyze_components(self, nodes: List[Node]) -> List[ThreatAnalysis]:
+        threats = []
+        for node in nodes:
+            if node.type in self.kb_threats:
+                for category, (base_severity, desc) in self.kb_threats[
+                    node.type
+                ].items():
+
+                    # Ajuste de severidade baseado em confiança da detecção
+                    final_severity = base_severity
+                    note = ""
+                    if node.confidence < 0.6:
+                        final_severity = "Low"
+                        note = " (Detectado com baixa confiança, verificar manual)"
+
+                    threats.append(
+                        ThreatAnalysis(
+                            category=category,
+                            severity=final_severity,
+                            affected_components=[node.id],
+                            description=f"{desc}{note}",
+                            recommendation=self._get_recommendation(
+                                category, node.type
+                            ),
+                        )
+                    )
+        return threats
+
+    def _analyze_flows(
+        self, graph: Graph, node_map: Dict[str, Node]
+    ) -> List[ThreatAnalysis]:
+        threats = []
 
         for edge in graph.edges:
             source = node_map.get(edge.source)
@@ -239,207 +131,152 @@ class StrideAnalyzer:
             if not source or not target:
                 continue
 
-            # User to database without security component
+            # --- Lógica de Trust Boundary (Onde o bicho pega) ---
+            # Se a flag cross_boundary vier True do GraphBuilder ou se os pais forem diferentes
+            is_crossing = edge.cross_boundary or (source.parent_id != target.parent_id)
+
+            if is_crossing:
+                # Cenário 1: Internet -> Interno (Perigo Máximo)
+                if source.type in ["user", "external_service"] and target.type not in [
+                    "load_balancer",
+                    "security",
+                ]:
+                    threats.append(
+                        ThreatAnalysis(
+                            category="Elevation of Privilege",
+                            severity="Critical",
+                            affected_components=[source.id, target.id],
+                            description=f"Violação de Fronteira: Acesso direto de {source.type} externo para recurso interno {target.type} sem WAF/Gateway.",
+                            recommendation="Colocar o recurso atrás de uma Private Subnet e expor apenas via Load Balancer/API Gateway.",
+                        )
+                    )
+
+                # Cenário 2: Cruzamento genérico de boundary
+                threats.append(
+                    ThreatAnalysis(
+                        category="Tampering",
+                        severity="High",
+                        affected_components=[source.id, target.id],
+                        description=f"Fluxo cruza fronteira de confiança entre {source.type} e {target.type}. Dados podem ser interceptados.",
+                        recommendation="Impor mTLS ou validação de JWT no ponto de entrada.",
+                    )
+                )
+
+            # --- Lógica Específica de Interação ---
+
+            # User -> Database Direto
             if source.type == "user" and target.type == "database":
-                threat = ThreatAnalysis(
-                    category="Elevation of Privilege",
-                    severity="High",
-                    affected_components=[edge.source, edge.target],
-                    description=f"Acesso direto de usuário ({edge.source}) ao banco de dados ({edge.target}) sem camada de segurança",
-                    recommendation="Adicionar camada de serviço intermediária e implementar controle de acesso rigoroso",
+                threats.append(
+                    ThreatAnalysis(
+                        category="Spoofing",
+                        severity="Critical",
+                        affected_components=[target.id],
+                        description="Banco de dados exposto diretamente para usuários finais.",
+                        recommendation="Remover acesso público do banco de dados imediatamente.",
+                    )
                 )
-                threats.append(threat)
 
-                threat = ThreatAnalysis(
-                    category="Information Disclosure",
-                    severity="High",
-                    affected_components=[edge.source, edge.target],
-                    description=f"Dados sensíveis do banco de dados ({edge.target}) podem ser expostos diretamente ao usuário ({edge.source})",
-                    recommendation="Implementar camada de abstração e filtrar dados sensíveis",
+            # Service -> Database (Escrita vs Leitura)
+            if source.type == "service" and target.type == "database":
+                # Assumimos risco de injeção
+                threats.append(
+                    ThreatAnalysis(
+                        category="Tampering",
+                        severity="High",
+                        affected_components=[target.id],
+                        description="Serviço grava no banco de dados. Risco de SQL Injection.",
+                        recommendation="Utilizar ORM ou Prepared Statements e aplicar Princípio do Menor Privilégio na role do banco.",
+                    )
                 )
-                threats.append(threat)
 
-            # Flow to external services
-            if target.type == "external_service":
-                threat = ThreatAnalysis(
-                    category="Spoofing",
-                    severity="High",
-                    affected_components=[edge.source, edge.target],
-                    description=f"Comunicação com serviço externo ({edge.target}) pode não validar autenticidade",
-                    recommendation="Implementar validação de certificados, autenticação mútua e verificação de origem",
+            # Logs sensíveis (Flow -> Monitoring)
+            if target.type == "monitoring":
+                threats.append(
+                    ThreatAnalysis(
+                        category="Information Disclosure",
+                        severity="Medium",
+                        affected_components=[source.id],
+                        description="Envio de dados para monitoramento pode conter PII ou Segredos.",
+                        recommendation="Sanitizar logs e mascarar dados sensíveis antes do envio.",
+                    )
                 )
-                threats.append(threat)
-
-                threat = ThreatAnalysis(
-                    category="Tampering",
-                    severity="Medium",
-                    affected_components=[edge.source, edge.target],
-                    description=f"Dados em trânsito para serviço externo ({edge.target}) podem ser interceptados",
-                    recommendation="Usar TLS 1.3+ e validar integridade de dados (HMAC, assinaturas digitais)",
-                )
-                threats.append(threat)
-
-            # Flow from external services
-            if source.type == "external_service":
-                threat = ThreatAnalysis(
-                    category="Tampering",
-                    severity="High",
-                    affected_components=[edge.source, edge.target],
-                    description=f"Dados recebidos de serviço externo ({edge.source}) podem estar comprometidos",
-                    recommendation="Implementar validação rigorosa de entrada e sanitização de dados",
-                )
-                threats.append(threat)
-
-            # Flow through boundaries
-            if source.type == "boundary" or target.type == "boundary":
-                boundary_node = (
-                    edge.source if source.type == "boundary" else edge.target
-                )
-                other_node = edge.target if source.type == "boundary" else edge.source
-
-                threat = ThreatAnalysis(
-                    category="Tampering",
-                    severity="High",
-                    affected_components=[edge.source, edge.target],
-                    description=f"Dados cruzando boundary ({boundary_node}) para {node_map[other_node].type} podem ser adulterados",
-                    recommendation="Validar e sanitizar dados em ambos os lados do boundary, usar assinaturas digitais",
-                )
-                threats.append(threat)
-
-            # Any flow without security component in path
-            if (
-                not has_security
-                and source.type != "security"
-                and target.type != "security"
-            ):
-                threat = ThreatAnalysis(
-                    category="Spoofing",
-                    severity="Medium",
-                    affected_components=[edge.source, edge.target],
-                    description=f"Fluxo de {source.type} ({edge.source}) para {target.type} ({edge.target}) sem autenticação explícita",
-                    recommendation="Adicionar componente de segurança ou implementar autenticação no nível de serviço",
-                )
-                threats.append(threat)
 
         return threats
 
-    def _analyze_architectural_patterns(self, graph: Graph) -> List[ThreatAnalysis]:
-        """Analyze threats based on overall architectural patterns."""
+    def _analyze_architecture(
+        self, graph: Graph, node_map: Dict[str, Node]
+    ) -> List[ThreatAnalysis]:
         threats = []
 
-        # Check for security components
-        security_nodes = [node for node in graph.nodes if node.type == "security"]
-        if not security_nodes:
-            threat = ThreatAnalysis(
-                category="Spoofing",
-                severity="High",
-                affected_components=[node.id for node in graph.nodes],
-                description="Arquitetura não possui componente de segurança dedicado para autenticação/autorização",
-                recommendation="Adicionar componente de segurança (API Gateway, Identity Provider, WAF)",
-            )
-            threats.append(threat)
+        # 1. Detecção de SPOF (Single Point of Failure)
+        # Nós com muitas conexões de entrada, que não são LB
+        in_degrees = {}
+        for edge in graph.edges:
+            in_degrees[edge.target] = in_degrees.get(edge.target, 0) + 1
 
-        # Check for monitoring
-        monitoring_nodes = [node for node in graph.nodes if node.type == "monitoring"]
-        if not monitoring_nodes:
-            threat = ThreatAnalysis(
-                category="Repudiation",
-                severity="Medium",
-                affected_components=[node.id for node in graph.nodes],
-                description="Arquitetura não possui componente de monitoring para auditabilidade",
-                recommendation="Adicionar sistema de logging, monitoring e alertas (SIEM, observability platform)",
-            )
-            threats.append(threat)
-
-        # Check for single points of failure (nodes with many incoming or outgoing edges)
-        node_degrees = self._get_node_degrees(graph)
-        for node_id, (in_degree, out_degree) in node_degrees.items():
-            if in_degree + out_degree >= 5:  # Threshold for high connectivity
-                node = next(n for n in graph.nodes if n.id == node_id)
-                threat = ThreatAnalysis(
-                    category="Denial of Service",
-                    severity="High",
-                    affected_components=[node_id],
-                    description=f"Componente {node.type} ({node_id}) é um ponto central com alta conectividade - SPOF",
-                    recommendation="Implementar redundância, load balancing e estratégias de failover",
+        for node_id, degree in in_degrees.items():
+            node = node_map[node_id]
+            if degree > 3 and node.type in ["service", "database"]:
+                threats.append(
+                    ThreatAnalysis(
+                        category="Denial of Service",
+                        severity="High",
+                        affected_components=[node_id],
+                        description=f"Gargalo detectado: {node.type} recebe conexões de {degree} fontes diferentes.",
+                        recommendation="Implementar Auto-Scaling Horizontal e Caching.",
+                    )
                 )
-                threats.append(threat)
 
-        # Check for databases without cache
-        database_nodes = [node for node in graph.nodes if node.type == "database"]
-        cache_nodes = [node for node in graph.nodes if node.type == "cache"]
-        if database_nodes and not cache_nodes:
-            threat = ThreatAnalysis(
-                category="Denial of Service",
-                severity="Medium",
-                affected_components=[node.id for node in database_nodes],
-                description="Bancos de dados sem camada de cache podem sofrer sobrecarga",
-                recommendation="Adicionar camada de cache (Redis, Memcached) para reduzir carga no banco",
-            )
-            threats.append(threat)
+        # 2. Falta de Segurança em Profundidade
+        has_security_layer = any(n.type == "security" for n in graph.nodes)
+        has_public_access = any(n.type == "user" for n in graph.nodes)
 
-        # Check for load balancer
-        load_balancer_nodes = [
-            node for node in graph.nodes if node.type == "load_balancer"
-        ]
-        service_nodes = [node for node in graph.nodes if node.type == "service"]
-        if len(service_nodes) > 1 and not load_balancer_nodes:
-            threat = ThreatAnalysis(
-                category="Denial of Service",
-                severity="Medium",
-                affected_components=[node.id for node in service_nodes],
-                description="Múltiplos serviços sem load balancer podem ter distribuição de carga inadequada",
-                recommendation="Adicionar load balancer para distribuir tráfego de forma eficiente",
+        if has_public_access and not has_security_layer:
+            threats.append(
+                ThreatAnalysis(
+                    category="Elevation of Privilege",
+                    severity="High",
+                    affected_components=[],
+                    description="Arquitetura exposta a usuários públicos sem camada de Segurança explícita (WAF/Auth).",
+                    recommendation="Adicionar Identity Provider (Cognito/Auth0) e WAF.",
+                )
             )
-            threats.append(threat)
 
         return threats
 
-    def _get_node_degrees(self, graph: Graph) -> Dict[str, tuple]:
-        """Calculate in-degree and out-degree for each node."""
-        degrees = {node.id: [0, 0] for node in graph.nodes}  # [in_degree, out_degree]
-
-        for edge in graph.edges:
-            if edge.source in degrees:
-                degrees[edge.source][1] += 1  # out_degree
-            if edge.target in degrees:
-                degrees[edge.target][0] += 1  # in_degree
-
-        return {k: tuple(v) for k, v in degrees.items()}
+    def _get_recommendation(self, category: str, component_type: str) -> str:
+        # Mini-banco de sugestões genéricas
+        recs = {
+            "Spoofing": "Implementar Autenticação Forte (MFA/Certificados).",
+            "Tampering": "Assinatura digital e integridade de dados.",
+            "Repudiation": "Logs auditáveis e centralizados com timestamp.",
+            "Information Disclosure": "Criptografia (TLS 1.3 em trânsito, AES-256 em repouso).",
+            "Denial of Service": "Rate Limiting, Throttling e CDN.",
+            "Elevation of Privilege": "RBAC (Role Based Access Control) e Zero Trust.",
+        }
+        return recs.get(category, "Revisar controles de segurança.")
 
     def _deduplicate_threats(
         self, threats: List[ThreatAnalysis]
     ) -> List[ThreatAnalysis]:
-        """Remove duplicate threats based on category and affected components."""
+        # Usa uma string de assinatura única para evitar duplicatas
         seen = set()
-        unique_threats = []
-
-        for threat in threats:
-            # Create a key from category and sorted affected components
-            key = (threat.category, tuple(sorted(threat.affected_components)))
-
-            if key not in seen:
-                seen.add(key)
-                unique_threats.append(threat)
-
-        return unique_threats
+        unique = []
+        for t in threats:
+            # Assinatura: Categoria + Componentes Afetados Ordenados
+            sig = f"{t.category}-{sorted(t.affected_components)}"
+            if sig not in seen:
+                seen.add(sig)
+                unique.append(t)
+        return unique
 
     def _generate_summary(self, threats: List[ThreatAnalysis]) -> ThreatSummary:
-        """Generate summary statistics about threats."""
-        by_severity = {"High": 0, "Medium": 0, "Low": 0}
-        by_category = {
-            "Spoofing": 0,
-            "Tampering": 0,
-            "Repudiation": 0,
-            "Information Disclosure": 0,
-            "Denial of Service": 0,
-            "Elevation of Privilege": 0,
-        }
-
-        for threat in threats:
-            by_severity[threat.severity] += 1
-            by_category[threat.category] += 1
+        counts = {"High": 0, "Medium": 0, "Low": 0, "Critical": 0}
+        cats = {}
+        for t in threats:
+            counts[t.severity] = counts.get(t.severity, 0) + 1
+            cats[t.category] = cats.get(t.category, 0) + 1
 
         return ThreatSummary(
-            total_threats=len(threats), by_severity=by_severity, by_category=by_category
+            total_threats=len(threats), by_severity=counts, by_category=cats
         )

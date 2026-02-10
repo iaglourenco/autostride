@@ -2,8 +2,7 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 from schemas.api_models import Graph, Node, Edge, Position
 
-
-# Mapping of class indices to component names
+# Mantemos o mapeamento, mas vamos usar para identificar quem pode ser pai
 CLASS_NAMES = {
     0: "boundary",
     1: "cache",
@@ -14,171 +13,204 @@ CLASS_NAMES = {
     6: "security",
     7: "service",
     8: "user",
-    9: "fluxo_seta",  # Arrow flow
+    9: "fluxo_seta",
 }
+
+# Classes que funcionam como containers (Boundaries, Subnets, Groups)
+CONTAINER_CLASSES = [0]
 
 
 class GraphBuilder:
-    """Builds a graph from YOLO detection results."""
+    """
+    Constrói um grafo hierárquico onde nós podem conter outros nós.
+    Essencial para reconstrução visual e análise de segurança (STRIDE).
+    """
 
     def __init__(self, min_confidence: float = 0.5):
-        self.component_classes = list(range(9))  # Classes 0-8 are components
-        self.arrow_class = 9  # Class 9 is arrow flow
+        self.component_classes = list(range(9))
+        self.arrow_class = 9
         self.min_confidence = min_confidence
 
     def build_graph(self, yolo_results) -> Graph:
-        """
-        Build a graph from YOLO results.
-
-        Args:
-            yolo_results: YOLO prediction results
-
-        Returns:
-            Graph object with nodes and edges
-        """
+        # 1. Extração bruta dos nós
         nodes = self._extract_nodes(yolo_results)
+
+        # 2. Construção da Hierarquia (Quem está dentro de quem?)
+        # Isso modifica os objetos 'nodes' adicionando parent_id
+        nodes = self._build_hierarchy(nodes)
+
+        # 3. Extração de Arestas com lógica de profundidade (Z-index)
         edges = self._extract_edges(yolo_results, nodes)
 
         return Graph(nodes=nodes, edges=edges)
 
     def _extract_nodes(self, yolo_results) -> List[Node]:
-        """Extract component nodes from detections."""
         nodes = []
-
         if not hasattr(yolo_results, "boxes") or yolo_results.boxes is None:
             return nodes
 
-        boxes = yolo_results.boxes
-
-        for idx, box in enumerate(boxes):
+        for idx, box in enumerate(yolo_results.boxes):
             cls_id = int(box.cls[0])
-            confidence = float(box.conf[0])
+            conf = float(box.conf[0])
 
-            # Filter out low confidence detections
-            if confidence < self.min_confidence:
+            if conf < self.min_confidence or cls_id not in self.component_classes:
                 continue
 
-            # Only process component classes (0-8), not arrows (9)
-            if cls_id not in self.component_classes:
-                continue
-
-            # Get bounding box coordinates
             xyxy = box.xyxy[0].cpu().numpy()
             x1, y1, x2, y2 = xyxy
 
-            # Calculate center position
-            center_x = (x1 + x2) / 2
-            center_y = (y1 + y2) / 2
+            # Calculamos área para saber quem é "menor" (o mais interno)
+            area = (x2 - x1) * (y2 - y1)
 
-            # Get confidence
-            confidence = float(box.conf[0])
-
-            # Create node
             node = Node(
                 id=f"node_{idx}",
                 type=CLASS_NAMES[cls_id],
-                position=Position(x=float(center_x), y=float(center_y)),
-                confidence=confidence,
+                position=Position(x=float((x1 + x2) / 2), y=float((y1 + y2) / 2)),
+                confidence=conf,
                 bbox=[float(x1), float(y1), float(x2), float(y2)],
+                # Campos novos sugeridos para reconstrução:
+                width=float(x2 - x1),
+                height=float(y2 - y1),
+                area=float(area),
+                parent_id=None,  # Será preenchido depois
+                children=[],  # Será preenchido depois
             )
-
             nodes.append(node)
 
         return nodes
 
+    def _build_hierarchy(self, nodes: List[Node]) -> List[Node]:
+        """
+        Detecta quais nós estão dentro de boundaries.
+        Lógica: Um nó é filho da MENOR boundary que o contém totalmente.
+        """
+        # Separar containers (boundaries) de itens normais
+        containers = [n for n in nodes if n.type == "boundary"]
+
+        # Ordenar containers por área (do menor para o maior)
+        # Isso garante que se A está dentro de Subnet, e Subnet está dentro de VPC,
+        # A detecte Subnet primeiro.
+        containers.sort(key=lambda x: x.area)
+
+        for node in nodes:
+            # Um container não pode ser pai dele mesmo, mas pode ser pai de outro container
+            # (ex: VPC contém Subnet)
+
+            # Procurar o primeiro container (o menor possível) que contém este nó
+            parent = None
+            for container in containers:
+                if node.id == container.id:
+                    continue
+
+                if self._is_contained(node.bbox, container.bbox):
+                    parent = container
+                    break  # Encontrei o menor pai possível, paro aqui.
+
+            if parent:
+                node.parent_id = parent.id
+                parent.children.append(node.id)
+
+        return nodes
+
     def _extract_edges(self, yolo_results, nodes: List[Node]) -> List[Edge]:
-        """Extract edges from arrow detections and connect to nearest nodes."""
         edges = []
-
-        if not hasattr(yolo_results, "boxes") or yolo_results.boxes is None:
-            return edges
-
         if not hasattr(yolo_results, "keypoints") or yolo_results.keypoints is None:
             return edges
 
+        # Mapeamento rápido por ID para lookup
+        node_map = {n.id: n for n in nodes}
+
         boxes = yolo_results.boxes
-        keypoints_data = yolo_results.keypoints
+        kpts_data = yolo_results.keypoints
 
         edge_idx = 0
-
-        for box_idx, box in enumerate(boxes):
-            cls_id = int(box.cls[0])
-
-            # Only process arrow class (9)
-            if cls_id != self.arrow_class:
+        for i, box in enumerate(boxes):
+            if int(box.cls[0]) != self.arrow_class:
                 continue
 
-            # Get keypoints for this arrow
-            # keypoints shape: (num_keypoints, 3) where 3 = (x, y, visibility)
-            kpts = keypoints_data.data[box_idx].cpu().numpy()
-
+            kpts = kpts_data.data[i].cpu().numpy()
             if len(kpts) < 2:
                 continue
 
-            # Get start and end points of the arrow
-            start_point = kpts[0][:2]  # (x, y) of first keypoint
-            start_vis = kpts[0][2]  # visibility of first keypoint
-            end_point = kpts[1][:2]  # (x, y) of second keypoint
-            end_vis = kpts[1][2]  # visibility of second keypoint
+            # Ponto 1 (Origem) e Ponto 2 (Destino)
+            p1, p2 = kpts[0], kpts[1]
 
-            # Ignore arrows with invisible keypoints
-            if start_vis == 0 or end_vis == 0:
+            # Se a visibilidade for baixa, ignora
+            if p1[2] < 0.5 or p2[2] < 0.5:
                 continue
 
-            # Find nearest nodes to start and end points
-            source_node = self._find_nearest_node(start_point, nodes)
-            target_node = self._find_nearest_node(end_point, nodes)
+            start_xy = p1[:2]
+            end_xy = p2[:2]
 
-            # Create edge if both nodes are found and they are different
-            if source_node and target_node and source_node.id != target_node.id:
+            # AQUI ESTÁ O TRUQUE PARA O GRAFO PRECISO:
+            # Usamos uma busca que prioriza o nó mais "profundo" na hierarquia
+            source = self._find_best_node_at_location(start_xy, nodes)
+            target = self._find_best_node_at_location(end_xy, nodes)
+
+            if source and target and source.id != target.id:
                 edge = Edge(
                     id=f"edge_{edge_idx}",
-                    source=source_node.id,
-                    target=target_node.id,
-                    keypoints=[
-                        [float(start_point[0]), float(start_point[1])],
-                        [float(end_point[0]), float(end_point[1])],
-                    ],
+                    source=source.id,
+                    target=target.id,
+                    # Adicionamos metadados de boundary crossing para o STRIDE
+                    cross_boundary=(source.parent_id != target.parent_id),
+                    keypoints=[start_xy.tolist(), end_xy.tolist()],
                 )
                 edges.append(edge)
                 edge_idx += 1
 
         return edges
 
-    def _find_nearest_node(
-        self, point: np.ndarray, nodes: List[Node], max_distance: float = 100.0
+    def _find_best_node_at_location(
+        self, point: np.ndarray, nodes: List[Node]
     ) -> Optional[Node]:
         """
-        Find the nearest node to a given point.
-
-        Args:
-            point: (x, y) coordinates
-            nodes: List of nodes
-
-        Returns:
-            Nearest node or None
+        Encontra o nó mais específico (menor área) que contém o ponto.
+        Se o ponto estiver dentro de um Service e de uma Boundary, retorna o Service.
         """
-        if not nodes:
-            return None
+        candidates = []
 
-        # First check if point is inside any node's bounding box
+        px, py = point
+
         for node in nodes:
             x1, y1, x2, y2 = node.bbox
-            if x1 <= point[0] <= x2 and y1 <= point[1] <= y2:
-                return node
+            # Tolerância de 5px (padding) para cliques na borda
+            padding = 5.0
+            if (x1 - padding) <= px <= (x2 + padding) and (y1 - padding) <= py <= (
+                y2 + padding
+            ):
+                candidates.append(node)
 
-        # If not inside any bbox, find nearest node by distance
-        min_distance = float("inf")
-        nearest_node = None
+        if not candidates:
+            # Fallback: Se não caiu dentro de ninguém, busca o mais próximo por distância
+            # Mas com um limite rigoroso (ex: 50px)
+            return self._find_nearest_by_distance(point, nodes, threshold=50.0)
+
+        # O PULO DO GATO:
+        # Se o ponto está dentro de vários (ex: Boundary e Service),
+        # ordenamos por área. O menor elemento é o mais específico.
+        candidates.sort(key=lambda n: n.area)
+
+        return candidates[0]
+
+    def _find_nearest_by_distance(self, point, nodes, threshold):
+        # Lógica antiga de fallback, apenas se não houver intersecção
+        best_node = None
+        min_dist = float("inf")
 
         for node in nodes:
-            # Calculate distance from point to node center
-            distance = np.sqrt(
+            dist = np.sqrt(
                 (node.position.x - point[0]) ** 2 + (node.position.y - point[1]) ** 2
             )
+            if dist < min_dist and dist < threshold:
+                min_dist = dist
+                best_node = node
+        return best_node
 
-            if distance < min_distance and distance <= max_distance:
-                min_distance = distance
-                nearest_node = node
+    def _is_contained(self, inner_bbox, outer_bbox) -> bool:
+        """Verifica se inner está totalmente (ou majoritariamente) dentro de outer."""
+        ix1, iy1, ix2, iy2 = inner_bbox
+        ox1, oy1, ox2, oy2 = outer_bbox
 
-        return nearest_node
+        # Verifica contaminação total
+        return ix1 >= ox1 and iy1 >= oy1 and ix2 <= ox2 and iy2 <= oy2
