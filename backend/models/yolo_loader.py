@@ -29,7 +29,7 @@ class YOLOModel:
             / "ml"
             / "runs"
             / "detect"
-            / "yolo11m-pose_manual"
+            / "yolo11m-pose_manual_v2_v1"
             / "weights"
             / "best.pt"
         )

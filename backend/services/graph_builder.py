@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Dict, Tuple
+from typing import List, Dict, Optional, Tuple
 from schemas.api_models import Graph, Node, Edge, Position
 
 
@@ -21,9 +21,10 @@ CLASS_NAMES = {
 class GraphBuilder:
     """Builds a graph from YOLO detection results."""
 
-    def __init__(self):
+    def __init__(self, min_confidence: float = 0.5):
         self.component_classes = list(range(9))  # Classes 0-8 are components
         self.arrow_class = 9  # Class 9 is arrow flow
+        self.min_confidence = min_confidence
 
     def build_graph(self, yolo_results) -> Graph:
         """
@@ -51,6 +52,11 @@ class GraphBuilder:
 
         for idx, box in enumerate(boxes):
             cls_id = int(box.cls[0])
+            confidence = float(box.conf[0])
+
+            # Filter out low confidence detections
+            if confidence < self.min_confidence:
+                continue
 
             # Only process component classes (0-8), not arrows (9)
             if cls_id not in self.component_classes:
@@ -111,7 +117,13 @@ class GraphBuilder:
 
             # Get start and end points of the arrow
             start_point = kpts[0][:2]  # (x, y) of first keypoint
+            start_vis = kpts[0][2]  # visibility of first keypoint
             end_point = kpts[1][:2]  # (x, y) of second keypoint
+            end_vis = kpts[1][2]  # visibility of second keypoint
+
+            # Ignore arrows with invisible keypoints
+            if start_vis == 0 or end_vis == 0:
+                continue
 
             # Find nearest nodes to start and end points
             source_node = self._find_nearest_node(start_point, nodes)
@@ -133,7 +145,9 @@ class GraphBuilder:
 
         return edges
 
-    def _find_nearest_node(self, point: np.ndarray, nodes: List[Node]) -> Node | None:
+    def _find_nearest_node(
+        self, point: np.ndarray, nodes: List[Node], max_distance: float = 100.0
+    ) -> Optional[Node]:
         """
         Find the nearest node to a given point.
 
@@ -147,6 +161,13 @@ class GraphBuilder:
         if not nodes:
             return None
 
+        # First check if point is inside any node's bounding box
+        for node in nodes:
+            x1, y1, x2, y2 = node.bbox
+            if x1 <= point[0] <= x2 and y1 <= point[1] <= y2:
+                return node
+
+        # If not inside any bbox, find nearest node by distance
         min_distance = float("inf")
         nearest_node = None
 
@@ -156,7 +177,7 @@ class GraphBuilder:
                 (node.position.x - point[0]) ** 2 + (node.position.y - point[1]) ** 2
             )
 
-            if distance < min_distance:
+            if distance < min_distance and distance <= max_distance:
                 min_distance = distance
                 nearest_node = node
 

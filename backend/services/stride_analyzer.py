@@ -197,6 +197,12 @@ class StrideAnalyzer:
         threats = []
 
         for node in nodes:
+
+            # Adjust severity based on detection confidence
+            confidence_modifier = ""
+            if node.confidence < 0.7:
+                confidence_modifier = "(baixa confiança)"
+
             component_type = node.type
             if component_type in self.component_threats:
                 for (
@@ -209,7 +215,7 @@ class StrideAnalyzer:
                         category=category,
                         severity=severity,
                         affected_components=[node.id],
-                        description=f"{component_type.replace('_', ' ').title()} ({node.id}): {description}",
+                        description=f"{component_type.replace('_', ' ').title()} ({node.id}): {description} {confidence_modifier}",
                         recommendation=recommendation,
                     )
                     threats.append(threat)
