@@ -13,15 +13,6 @@ __pycache__/
 # Datasets
 datasets/
 
-# Model weights and checkpoints
-models/
-*.pt
-*.pth
-*.ckpt
-*.h5
-*.onnx
-*.pb
-
 # Training runs and experiments
 experiments/
 wandb/
