@@ -10,8 +10,6 @@ __pycache__/
 *$py.class
 *.so
 
-# Datasets
-datasets/
 
 # Training runs and experiments
 experiments/

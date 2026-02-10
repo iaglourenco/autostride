@@ -1,0 +1,20 @@
+# Dataset configuration for YOLO-pose
+path: C:\Users\Iago\Documents\Projects\autostride\ml\src\..\datasets\manual_v3
+train: train/images
+val: val/images
+
+# Classes
+names:
+  0: boundary
+  1: cache
+  2: database
+  3: external_service
+  4: load_balancer
+  5: monitoring
+  6: security
+  7: service
+  8: user
+  9: fluxo_seta
+
+# Keypoints (2 por seta: cauda e ponta)
+kpt_shape: [2, 3]  # 2 keypoints, 3 dims cada (x, y, visibility)

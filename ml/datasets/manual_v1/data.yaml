@@ -1,0 +1,17 @@
+path: C:/Users/Iago/Documents/Projects/autostride/ml/datasets/manual_v1
+train: train/images
+val: val/images
+
+names:
+  0: boundary
+  1: cache
+  2: database
+  3: external_service
+  4: load_balancer
+  5: monitoring
+  6: security
+  7: service
+  8: user
+  9: fluxo_seta
+
+kpt_shape: [2, 3]
