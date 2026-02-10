@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Dict, Optional, Tuple
+from typing import List, Optional
 from schemas.api_models import Graph, Node, Edge, Position
 
 # Mantemos o mapeamento, mas vamos usar para identificar quem pode ser pai
@@ -117,9 +117,6 @@ class GraphBuilder:
         if not hasattr(yolo_results, "keypoints") or yolo_results.keypoints is None:
             return edges
 
-        # Mapeamento rápido por ID para lookup
-        node_map = {n.id: n for n in nodes}
-
         boxes = yolo_results.boxes
         kpts_data = yolo_results.keypoints
 
@@ -135,8 +132,8 @@ class GraphBuilder:
             # Ponto 1 (Origem) e Ponto 2 (Destino)
             p1, p2 = kpts[0], kpts[1]
 
-            # Se a visibilidade for baixa, ignora
-            if p1[2] < 0.5 or p2[2] < 0.5:
+            # Se a visibilidade for muito baixa, ignora
+            if p1[2] < 0.3 or p2[2] < 0.3:
                 continue
 
             start_xy = p1[:2]
@@ -167,6 +164,7 @@ class GraphBuilder:
         """
         Encontra o nó mais específico (menor área) que contém o ponto.
         Se o ponto estiver dentro de um Service e de uma Boundary, retorna o Service.
+        Prioriza nós não-container para conexões.
         """
         candidates = []
 
@@ -174,8 +172,8 @@ class GraphBuilder:
 
         for node in nodes:
             x1, y1, x2, y2 = node.bbox
-            # Tolerância de 5px (padding) para cliques na borda
-            padding = 5.0
+            # Tolerância aumentada para capturar melhor as conexões nas bordas
+            padding = 15.0
             if (x1 - padding) <= px <= (x2 + padding) and (y1 - padding) <= py <= (
                 y2 + padding
             ):
@@ -183,28 +181,40 @@ class GraphBuilder:
 
         if not candidates:
             # Fallback: Se não caiu dentro de ninguém, busca o mais próximo por distância
-            # Mas com um limite rigoroso (ex: 50px)
-            return self._find_nearest_by_distance(point, nodes, threshold=50.0)
+            # Threshold aumentado para maior tolerância
+            return self._find_nearest_by_distance(point, nodes, threshold=100.0)
 
         # O PULO DO GATO:
         # Se o ponto está dentro de vários (ex: Boundary e Service),
-        # ordenamos por área. O menor elemento é o mais específico.
-        candidates.sort(key=lambda n: n.area)
+        # PRIORIZA nós não-container (services, databases, etc)
+        non_containers = [n for n in candidates if n.type not in ["boundary"]]
 
+        if non_containers:
+            # Ordena por área, pega o menor (mais específico)
+            non_containers.sort(key=lambda n: n.area)
+            return non_containers[0]
+
+        # Se só tem containers, pega o menor
+        candidates.sort(key=lambda n: n.area)
         return candidates[0]
 
     def _find_nearest_by_distance(self, point, nodes, threshold):
-        # Lógica antiga de fallback, apenas se não houver intersecção
+        """Busca o nó mais próximo ao ponto, priorizando nós não-container."""
         best_node = None
         min_dist = float("inf")
 
-        for node in nodes:
+        # Primeiro tenta encontrar entre nós não-container
+        non_containers = [n for n in nodes if n.type not in ["boundary"]]
+        candidates = non_containers if non_containers else nodes
+
+        for node in candidates:
             dist = np.sqrt(
                 (node.position.x - point[0]) ** 2 + (node.position.y - point[1]) ** 2
             )
             if dist < min_dist and dist < threshold:
                 min_dist = dist
                 best_node = node
+
         return best_node
 
     def _is_contained(self, inner_bbox, outer_bbox) -> bool:
