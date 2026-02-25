@@ -411,41 +411,32 @@ frontend/src/
 
 ## Scripts de Machine Learning
 
-### Pipeline de Treinamento
-
-```
-[Anotação] → [Conversão] → [Limpeza] → [Treinamento] → [Avaliação] → [Deploy]
-    ↓            ↓            ↓             ↓              ↓            ↓
-  Label      ls_to_      clean.py      train.py      compare_    yolo_
-  Studio     yolo.py                                 models.py   loader.py
-```
-
 ### Ferramentas Disponíveis
 
 #### 1. ls_to_yolo.py ([ml/src/ls_to_yolo.py](ml/src/ls_to_yolo.py))
 
-**Propósito**: Converte formato Label Studio JSON para YOLO-pose format
+**Propósito**: Converte formato Label Studio JSON para YOLO-pose format e combina com as imagens originais para gerar dataset de treinamento.
 
 **Uso**:
+Ajuste as configurações de `ROOT_DIR`, `JSON_INPUT` e `IMAGES_SRC` no início do script, depois execute
+
 ```bash
-python ml/src/ls_to_yolo.py \
-  --input ml/datasets/raw/ls.json \
-  --output ml/datasets/manual_v3 \
-  --split 0.8  # 80% train, 20% val
+python ml/src/ls_to_yolo.py
 ```
 
 **O que faz**:
 - Lê anotações JSON do Label Studio
 - Converte bounding boxes para formato YOLO (normalized x_center, y_center, width, height)
 - Converte keypoints para formato pose (normalized x1, y1, visibility, x2, y2, visibility)
-- Split automático train/val
+- Split automático train/val (80/20)
 - Gera `data.yaml` com configuração do dataset
 
 **Formato YOLO-pose**:
 ```
 # arquivo: labels/image001.txt
-0 0.5 0.3 0.1 0.15                    # class x_center y_center width height
-9 0.2 0.4 0.08 0.12 0.25 0.42 1 0.65 0.68 1  # class bbox kpt1_x kpt1_y vis kpt2_x kpt2_y vis
+6 0.360824 0.270751 0.201986 0.158070 0 0 0 0 0 0                                 # class bbox kpt1_x kpt1_y vis kpt2_x kpt2_y vis (para bounding boxes dos componentes)
+9 0.499275 0.705285 0.113881 0.020000 0.452334 0.705285 2 0.546215 0.705285 2     # class bbox kpt1_x kpt1_y vis kpt2_x kpt2_y vis (para setas, com keypoints)
+
 ```
 
 #### 2. train.py ([ml/src/train.py](ml/src/train.py))
@@ -691,9 +682,6 @@ docker-compose down
 ---
 
 <div align="center">
-
-**AutoStride** - Automatizando Segurança de Software com IA
-Desenvolvido com ❤️ para o Hackaton FIAP 2026
 
 [⬆ Voltar ao Topo](#autostride)
 

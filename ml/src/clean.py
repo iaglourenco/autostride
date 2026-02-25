@@ -10,7 +10,7 @@ import json
 
 # ============ CONFIGURAÇÕES ============
 LABEL_STUDIO_URL = "http://localhost:8080"  # Ajuste se necessário
-API_TOKEN = "8dba6f8133bbc0846649312fdce0b9e6898005f4"  # Pegue em: Account & Settings → Access Token
+API_TOKEN = "8dba6f8133bbc0846649312fdce0b9e6898005f4"  # Pegue em: Account & Settings → Access Token (Roda localmente, então não há risco de expor no GitHub :D)
 PROJECT_ID = 4  # ID do seu projeto (veja na URL quando abrir o projeto)
 
 # =======================================
