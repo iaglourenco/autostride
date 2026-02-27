@@ -215,10 +215,31 @@ class GraphBuilder:
 
         return best_node
 
-    def _is_contained(self, inner_bbox, outer_bbox) -> bool:
-        """Verifica se inner está totalmente (ou majoritariamente) dentro de outer."""
+    def _is_contained(self, inner_bbox, outer_bbox, threshold: float = 0.8) -> bool:
+        """
+        Verifica se o nó 'inner' está substancialmente contido no 'outer'.
+        Usa Interseção sobre Área (IoA) para tolerar imprecisões de detecção.
+        """
         ix1, iy1, ix2, iy2 = inner_bbox
         ox1, oy1, ox2, oy2 = outer_bbox
 
-        # Verifica contaminação total
-        return ix1 >= ox1 and iy1 >= oy1 and ix2 <= ox2 and iy2 <= oy2
+        # 1. Calcular as coordenadas do retângulo de interseção
+        x1_inter = max(ix1, ox1)
+        y1_inter = max(iy1, oy1)
+        x2_inter = min(ix2, ox2)
+        y2_inter = min(iy2, oy2)
+
+        # 2. Calcular largura e altura da interseção (garantindo que não sejam negativas)
+        width_inter = max(0, x2_inter - x1_inter)
+        height_inter = max(0, y2_inter - y1_inter)
+
+        # 3. Calcular áreas
+        area_inter = width_inter * height_inter
+        area_inner = (ix2 - ix1) * (iy2 - iy1)
+
+        if area_inner <= 0:
+            return False
+
+        # 4. Verificar se a porcentagem de sobreposição atinge o limite (ex: 80%)
+        overlap_ratio = area_inter / area_inner
+        return overlap_ratio >= threshold

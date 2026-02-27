@@ -68,6 +68,46 @@ class StrideAnalyzer:
                     "Terminação SSL insegura ou logs de acesso expostos.",
                 ),
             },
+            "user": {
+                "Spoofing": (
+                    "Critical",
+                    "Roubo de identidade, sequestro de sessão ou credenciais fracas.",
+                ),
+                "Repudiation": (
+                    "Medium",
+                    "Usuário negando a autoria de uma ação por falta de logs de trilha (Audit Trail).",
+                ),
+            },
+            "security": {
+                "Denial of Service": (
+                    "High",
+                    "Exaustão de recursos no WAF/Gateway (ex: Slowloris) impedindo o tráfego legítimo.",
+                ),
+                "Elevation of Privilege": (
+                    "Critical",
+                    "Bypass de regras de firewall ou falha na lógica de autorização (RBAC).",
+                ),
+            },
+            "monitoring": {
+                "Information Disclosure": (
+                    "Medium",
+                    "Logs contendo PII, tokens de autenticação ou segredos expostos em texto claro.",
+                ),
+                "Tampering": (
+                    "High",
+                    "Alteração ou deleção de logs para esconder evidências de um ataque.",
+                ),
+            },
+            "boundary": {
+                "Information Disclosure": (
+                    "Low",
+                    "Vazamento de metadados da topologia de rede interna (IPs, nomes de subnets).",
+                ),
+                "Tampering": (
+                    "High",
+                    "Modificação não autorizada de tabelas de roteamento ou regras de ACL.",
+                ),
+            },
         }
 
     def analyze(self, graph: Graph) -> StrideAnalysisResult:
