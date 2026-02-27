@@ -131,12 +131,11 @@ class StrideAnalyzer:
             if not source or not target:
                 continue
 
-            # --- Lógica de Trust Boundary (Onde o bicho pega) ---
             # Se a flag cross_boundary vier True do GraphBuilder ou se os pais forem diferentes
             is_crossing = edge.cross_boundary or (source.parent_id != target.parent_id)
 
             if is_crossing:
-                # Cenário 1: Internet -> Interno (Perigo Máximo)
+                # Cenário 1: Internet -> Interno
                 if source.type in ["user", "external_service"] and target.type not in [
                     "load_balancer",
                     "security",
@@ -162,8 +161,6 @@ class StrideAnalyzer:
                     )
                 )
 
-            # --- Lógica Específica de Interação ---
-
             # User -> Database Direto
             if source.type == "user" and target.type == "database":
                 threats.append(
@@ -176,7 +173,7 @@ class StrideAnalyzer:
                     )
                 )
 
-            # Service -> Database (Escrita vs Leitura)
+            # Service -> Database
             if source.type == "service" and target.type == "database":
                 # Assumimos risco de injeção
                 threats.append(
@@ -245,7 +242,6 @@ class StrideAnalyzer:
         return threats
 
     def _get_recommendation(self, category: str, component_type: str) -> str:
-        # Mini-banco de sugestões genéricas
         recs = {
             "Spoofing": "Implementar Autenticação Forte (MFA/Certificados).",
             "Tampering": "Assinatura digital e integridade de dados.",

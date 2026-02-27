@@ -139,7 +139,6 @@ class GraphBuilder:
             start_xy = p1[:2]
             end_xy = p2[:2]
 
-            # AQUI ESTÁ O TRUQUE PARA O GRAFO PRECISO:
             # Usamos uma busca que prioriza o nó mais "profundo" na hierarquia
             source = self._find_best_node_at_location(start_xy, nodes)
             target = self._find_best_node_at_location(end_xy, nodes)
@@ -184,7 +183,6 @@ class GraphBuilder:
             # Threshold aumentado para maior tolerância
             return self._find_nearest_by_distance(point, nodes, threshold=100.0)
 
-        # O PULO DO GATO:
         # Se o ponto está dentro de vários (ex: Boundary e Service),
         # PRIORIZA nós não-container (services, databases, etc)
         non_containers = [n for n in candidates if n.type not in ["boundary"]]
