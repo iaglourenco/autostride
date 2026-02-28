@@ -9,6 +9,7 @@
 
 > **Projeto Hackaton** - Curso de Pós-Graduação em Inteligência Artificial pela FIAP
 
+Vídeo de demonstração: [https://youtu.be/bX2wWPLpp7M](https://youtu.be/bX2wWPLpp7M)
 ---
 
 ## Resumo Executivo
